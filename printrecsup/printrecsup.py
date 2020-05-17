@@ -17,20 +17,20 @@
 # 
 # 
 
-# In[1]:
+# In[7]:
 
 
 import pymongo
 import arrow
 
 
-# In[2]:
+# In[8]:
 
 
 import boto3
 
 
-# In[3]:
+# In[9]:
 
 
 s3 = boto3.resource('s3')
@@ -42,7 +42,7 @@ s3 = boto3.resource('s3')
 
 
 
-# In[4]:
+# In[10]:
 
 
 #s3.create_bucket(Bucket='printrecsup')
@@ -50,47 +50,66 @@ s3 = boto3.resource('s3')
 #    'LocationConstraint': 'us-west-1'})
 
 
-# In[6]:
+# In[11]:
 
 
 #for bucket in s3.buckets.all():
 #    print(bucket.name)
 
 
-# In[158]:
+# In[12]:
 
 
 #data = open('/home/pi/Downloads/87-philghcq.png', 'rb')
 #s3.Bucket('printrecsup').put_object(Key='87-philghcq.png', Body=data)
 
 
-# In[ ]:
+# In[59]:
 
 
 
 
+clirek = boto3.client('rekognition')
 
-# In[ ]:
+
+# In[60]:
 
 
 #https://printrecsup.s3.amazonaws.com/87-philghcq.png
 
 
-# In[129]:
+# In[61]:
+
+
+client = boto3.client('translate')
+
+
+# In[39]:
+
+
+#response = client.translate_text(
+#    Text='hello there.',
+    
+#    SourceLanguageCode='auto',
+#    TargetLanguageCode='zh'
+#)
+
+
+# In[14]:
 
 
 with open('/home/pi/mongo.txt', 'r') as monconf:
     monc = monconf.read().replace('\n', '')
 
 
-# In[130]:
+# In[15]:
 
 
 
 client = pymongo.MongoClient(monc)
 
 
-# In[131]:
+# In[16]:
 
 
 db = client['printrecsup']
@@ -99,46 +118,129 @@ db = client['printrecsup']
 series_collection = db['print']
 
 
-# In[132]:
+# In[17]:
 
 
 #post = {"image" : "pi.png", "id" : uuid.uuid4(), "username" : 'william', 'datetime': datetime.timestamp,
 #       'datedue' : duedate.timestamp}
 
 
-# In[163]:
+# In[82]:
 
 
-def createentry(imagepath, filename, username, price, duehours, printcompany, status):
+def createentry(imagepath, filename, username, price, quantity, duehours, printcompany, status):
+    response = client.translate_text(
+    Text=status,
+    SourceLanguageCode='auto',
+    TargetLanguageCode='zh')
+    
+
     datetime = arrow.now()
     duedate = datetime.shift(hours=duehours)
     data = open(imagepath + filename, 'rb')
     s3.Bucket('printrecsup').put_object(Key=filename, Body=data)
-    post = {"image" : 'https://printrecsup.s3.amazonaws.com/' + filename, "username" : username, 
-     'datetime': datetime.timestamp, 'datedue' : duedate.timestamp,
-    'printer' : printcompany, 'status' : status}
+    
+    resp = clirek.detect_labels(
+    Image={
+        
+        'S3Object': {
+            'Bucket': 'printrecsup',
+            'Name': filename
+        }})
+
+    somelis = list()
+    for reslab in resp['Labels']:
+        #print(reslab['Name'])
+        somelis.append(reslab['Name'])
+    
+    post = {'image' : 'https://printrecsup.s3.amazonaws.com/' + filename, 
+            'username' : username, 'price' : price, 'quantity' : quantity,
+            'totalinvoice' : price * quantity, 'datetime': datetime.timestamp, 'datedue' : duedate.timestamp,
+    'printer' : printcompany, 'status' : status, 'zhstatus' : response['TranslatedText'],
+           'labels' : somelis}
     return(series_collection.insert_one(post).inserted_id)
 
     #return(inserted_id)
     
 
 
-# In[164]:
+# In[ ]:
 
 
-#createentry('/home/pi/Downloads/', 'blackyome.png', 'william', 500, 12, 'zoomprint', 'created')
 
 
-# In[135]:
+
+# In[83]:
 
 
-def find_document(elements, multiple=True):
+def find_document(elements, multiple=False):
 
     return series_collection.find_one(elements)
 
 
-# In[136]:
+# In[84]:
 
 
-#find_document({'image' : '/home/pi/pi.png'})
+#createentry('/home/pi/Downloads/', '87-philghcq.png', 'william', 
+#            
+#            500, 50, 12, 
+#            'zoomprint', 'created')
+
+
+# In[85]:
+
+
+find_document({'image' : 'https://printrecsup.s3.amazonaws.com/87-philghcq.png'})
+
+
+# In[26]:
+
+
+#createentry('/home/pi/Downloads/', 'Gates.png', 'william', 500, 12, 'zoomprint', 'finished')
+
+
+# In[45]:
+
+
+#createentry('/home/pi/Downloads/', 'download.jpeg', 'william', 500, 12, 'zoomprint', 'created')
+
+
+# In[ ]:
+
+
+
+
+
+# In[27]:
+
+
+def find_document(elements, multiple=False):
+
+    return series_collection.find_one(elements)
+
+
+# In[ ]:
+
+
+
+
+
+# In[30]:
+
+
+#find_document({'username' : 'william'})
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+def find_document(elements, multiple=False):
+
+    return series_collection.find_one(elements)
 
